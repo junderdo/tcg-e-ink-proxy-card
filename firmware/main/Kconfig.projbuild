@@ -1,0 +1,31 @@
+menu "e-Paper pins"
+
+    config EPD_PIN_DIN
+        int "DIN (MOSI)"
+        default 5
+
+    config EPD_PIN_CLK
+        int "CLK (SCK)"
+        default 6
+
+    config EPD_PIN_CS
+        int "CS"
+        default 1
+
+    config EPD_PIN_DC
+        int "DC"
+        default 2
+
+    config EPD_PIN_RST
+        int "RST"
+        default 3
+
+    config EPD_PIN_BUSY
+        int "BUSY"
+        default 4
+
+    config EPD_PIN_PWR
+        int "PWR"
+        default 7
+
+endmenu
