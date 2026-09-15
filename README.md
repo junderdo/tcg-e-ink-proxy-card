@@ -11,8 +11,10 @@ Reference: [Waveshare wiki](https://www.waveshare.com/wiki/3.6inch_e-Paper_HAT%2
 | --- | --- |
 | `firmware/` | ESP-IDF project |
 | `firmware/components/epd_3in6e/` | Panel driver, ported from Waveshare's Arduino demo to hardware SPI |
-| `firmware/main/` | App that shows `image.bin` once and powers the panel off |
+| `firmware/main/` | App that shows the last uploaded image (or `image.bin`) and accepts new ones over BLE |
 | `tools/png_to_epd.py` | Converts an image into `firmware/main/image.bin` |
+| `tools/ble_upload.py` | Uploads an image over BLE |
+| `docs/ble-image-upload.md` | BLE upload protocol |
 | `images/` | Source PNGs |
 
 ## Wiring (Seeed XIAO ESP32-S3)
@@ -70,10 +72,32 @@ This rewrites `firmware/main/image.bin`. Check `/tmp/preview.png` for the
 dithered result, then build and flash. Pass `--no-dither` for hard-edged
 graphics. The image stays on screen with the board unpowered.
 
+## Upload an image over BLE
+
+The board advertises as **TCG Proxy Card**. A connected client can send an
+image, which the firmware saves to the `image` flash partition and shows; it
+is shown again after a reboot. Until an image is uploaded, the built-in
+`image.bin` is shown. See [docs/ble-image-upload.md](docs/ble-image-upload.md)
+for the protocol.
+
+From a computer with Bluetooth (uses the same conversion as `png_to_epd.py`):
+
+```sh
+.venv/bin/python tools/ble_upload.py images/my-image.png
+```
+
+The saved image lives in the `image` partition of `firmware/partitions.csv`,
+which `idf.py flash` writes (`app-flash` alone doesn't). To go back to the
+built-in image, erase it:
+
+```sh
+python -m esptool --chip esp32s3 -p /dev/ttyACM0 erase_region 0x190000 0x40000
+```
+
 ## Panel care
 
 - Don't leave the panel powered between refreshes; the firmware puts it to
   sleep and cuts power.
-- Refresh no more often than every 180 s, and at least once every 24 h when in
+- Refresh no more often than every 180 s (the firmware rejects uploads sooner), and at least once every 24 h when in
   regular use.
 - Clear to white before long-term storage.
