@@ -41,6 +41,7 @@ ERRORS = {
     0x0A: "NO_MEMORY",
     0x0B: "STORAGE_FAILED",
     0x0C: "DISPLAY_FAILED",
+    0x0D: "COOLDOWN",
 }
 
 

@@ -98,6 +98,6 @@ python -m esptool --chip esp32s3 -p /dev/ttyACM0 erase_region 0x190000 0x40000
 
 - Don't leave the panel powered between refreshes; the firmware puts it to
   sleep and cuts power.
-- Refresh no more often than every 180 s, and at least once every 24 h when in
+- Refresh no more often than every 180 s (the firmware rejects uploads sooner), and at least once every 24 h when in
   regular use.
 - Clear to white before long-term storage.

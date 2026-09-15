@@ -128,6 +128,7 @@ Every `ERROR` ends the transfer; start again with `START`.
 | `0x0A` | `NO_MEMORY` | couldn't allocate the frame buffer | 0 |
 | `0x0B` | `STORAGE_FAILED` | only as `DISPLAYED`'s code: shown, but won't survive a reboot | 0 |
 | `0x0C` | `DISPLAY_FAILED` | panel refresh failed (e.g. busy timeout / wiring) | 0 |
+| `0x0D` | `COOLDOWN` | less than 180 s since the last refresh (including the one at boot); checked at `START` and `COMMIT` | seconds until a refresh is allowed |
 
 ## Behavior
 
@@ -141,7 +142,9 @@ Every `ERROR` ends the transfer; start again with `START`.
   the phone's connection interval. Saving takes ~1-2 s and a refresh ~20-40 s.
   Allow at least 90 s between `VERIFIED` and `DISPLAYED` before giving up.
 - **Panel care.** The panel shouldn't refresh more often than every 180 s.
-  The card doesn't enforce this; the app should.
+  The card enforces this from the end of the previous refresh, including the
+  one at boot, and answers `COOLDOWN` with the seconds left. Check before
+  uploading so the user isn't left waiting after a full transfer.
 
 ## Notes for the app
 
@@ -167,4 +170,4 @@ The app is Flutter (iOS, Android, web).
   `png_to_epd.py`. Run it in an isolate (`compute`) — it's ~240k pixels. The
   dithered RGB result doubles as the preview.
 - **Flow.** Show progress from `PROGRESS` / chunk count, then a "refreshing"
-  state from `VERIFIED` until `DISPLAYED`. On `BUSY`, wait and retry.
+  state from `VERIFIED` until `DISPLAYED`. On `BUSY`, wait and retry; on `COOLDOWN`, show a countdown from `value`.

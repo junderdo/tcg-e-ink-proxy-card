@@ -38,6 +38,7 @@ typedef enum {
     ERR_NO_MEMORY = 0x0A,
     ERR_STORAGE_FAILED = 0x0B,
     ERR_DISPLAY_FAILED = 0x0C,
+    ERR_COOLDOWN = 0x0D,
 } upload_error_t;
 
 static const char *TAG = "upload";
@@ -107,6 +108,10 @@ static upload_error_t start(const uint8_t *msg, size_t len, uint32_t *value)
     if (display_busy()) {
         return ERR_BUSY;
     }
+    *value = display_cooldown_s();
+    if (*value > 0) {
+        return ERR_COOLDOWN;
+    }
     s_frame = malloc(size);
     if (s_frame == NULL) {
         return ERR_NO_MEMORY;
@@ -136,6 +141,13 @@ static upload_error_t commit(size_t len, uint32_t *value)
     if (crc32 != s_crc32) {
         *value = crc32;
         return ERR_CRC_MISMATCH;
+    }
+    if (display_busy()) {
+        return ERR_BUSY;
+    }
+    *value = display_cooldown_s();
+    if (*value > 0) {
+        return ERR_COOLDOWN;
     }
 
     // Sent before the hand-off so it always precedes the display task's DISPLAYED.

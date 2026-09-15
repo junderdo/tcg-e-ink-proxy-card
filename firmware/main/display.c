@@ -5,6 +5,7 @@
 #include "epd_3in6e.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -12,6 +13,7 @@
 #include "sdkconfig.h"
 
 #define TASK_STACK_SIZE 4096
+#define MIN_REFRESH_INTERVAL_S 180
 
 extern const uint8_t image_bin_start[] asm("_binary_image_bin_start");
 extern const uint8_t image_bin_end[] asm("_binary_image_bin_end");
@@ -25,6 +27,12 @@ typedef struct {
 
 static QueueHandle_t s_jobs;
 static atomic_bool s_busy = true;
+static atomic_uint_least32_t s_next_refresh_s;
+
+static uint32_t uptime_s(void)
+{
+    return esp_timer_get_time() / 1000000;
+}
 
 static esp_err_t render(const uint8_t *frame)
 {
@@ -49,6 +57,8 @@ static esp_err_t render(const uint8_t *frame)
     epd_3in6e_sleep();
     vTaskDelay(pdMS_TO_TICKS(2000));
     epd_3in6e_close();
+    // Counted even on failure: the panel may have been partly driven.
+    atomic_store(&s_next_refresh_s, uptime_s() + MIN_REFRESH_INTERVAL_S);
     return err;
 }
 
@@ -104,10 +114,21 @@ bool display_busy(void)
     return atomic_load(&s_busy);
 }
 
+uint32_t display_cooldown_s(void)
+{
+    uint32_t next = atomic_load(&s_next_refresh_s);
+    uint32_t now = uptime_s();
+    return next > now ? next - now : 0;
+}
+
 esp_err_t display_show_new(uint8_t *frame, display_done_fn done)
 {
     bool idle = false;
     if (!atomic_compare_exchange_strong(&s_busy, &idle, true)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (display_cooldown_s() > 0) {
+        atomic_store(&s_busy, false);
         return ESP_ERR_INVALID_STATE;
     }
     const job_t job = { .frame = frame, .done = done };
