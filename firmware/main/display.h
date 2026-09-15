@@ -6,7 +6,7 @@
 
 typedef void (*display_done_fn)(esp_err_t save_err, esp_err_t display_err);
 
-/** Starts the display task, which first shows the saved image, or the built-in one if none is saved. */
+/** Starts the display task. The panel is left untouched until a new frame arrives. */
 esp_err_t display_start(void);
 
 /** True while the display task is saving or refreshing and can't take a new frame. */

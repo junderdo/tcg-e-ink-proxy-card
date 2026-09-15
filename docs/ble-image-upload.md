@@ -119,16 +119,16 @@ Every `ERROR` ends the transfer; start again with `START`.
 | `0x01` | `INVALID_MESSAGE` | wrong length or unknown opcode | 0 |
 | `0x02` | `UNSUPPORTED_FORMAT` | `format` isn't `0x01` | format sent |
 | `0x03` | `INVALID_SIZE` | `size` isn't 120,000 | expected size |
-| `0x04` | `BUSY` | the panel is still refreshing (at boot, or from the previous upload); retry after `DISPLAYED` or in a few seconds | 0 |
+| `0x04` | `BUSY` | the panel is still saving or refreshing the previous upload; retry after `DISPLAYED` or in a few seconds | 0 |
 | `0x05` | `NO_TRANSFER` | data or `COMMIT` without an active `START` | 0 |
 | `0x06` | `BAD_OFFSET` | chunk offset isn't the next expected byte | bytes received |
 | `0x07` | `OVERFLOW` | chunk runs past the declared size | declared size |
 | `0x08` | `INCOMPLETE` | `COMMIT` before all bytes arrived | bytes received |
 | `0x09` | `CRC_MISMATCH` | frame doesn't match `crc32` | CRC the card computed |
 | `0x0A` | `NO_MEMORY` | couldn't allocate the frame buffer | 0 |
-| `0x0B` | `STORAGE_FAILED` | only as `DISPLAYED`'s code: shown, but won't survive a reboot | 0 |
+| `0x0B` | `STORAGE_FAILED` | only as `DISPLAYED`'s code: shown, but not saved to flash | 0 |
 | `0x0C` | `DISPLAY_FAILED` | panel refresh failed (e.g. busy timeout / wiring) | 0 |
-| `0x0D` | `COOLDOWN` | less than 180 s since the last refresh (including the one at boot); checked at `START` and `COMMIT` | seconds until a refresh is allowed |
+| `0x0D` | `COOLDOWN` | less than 180 s since the last refresh or since boot; checked at `START` and `COMMIT` | seconds until a refresh is allowed |
 
 ## Behavior
 
@@ -136,14 +136,15 @@ Every `ERROR` ends the transfer; start again with `START`.
   card finishes saving and refreshing even if the central disconnects; it
   just can't send `DISPLAYED`.
 - **Persistence.** A verified frame is written to the `image` flash partition
-  before the refresh and shown again on every boot. With no valid saved frame
-  the card shows the built-in `image.bin`.
+  before the refresh. Booting never refreshes the panel; the e-paper keeps
+  the last image without power until the next upload.
 - **Timing.** At 1M PHY and MTU 517 a transfer takes roughly 5-15 s depending on
   the phone's connection interval. Saving takes ~1-2 s and a refresh ~20-40 s.
   Allow at least 90 s between `VERIFIED` and `DISPLAYED` before giving up.
 - **Panel care.** The panel shouldn't refresh more often than every 180 s.
-  The card enforces this from the end of the previous refresh, including the
-  one at boot, and answers `COOLDOWN` with the seconds left. Check before
+  The card enforces this from the end of the previous refresh, and also for
+  180 s after boot because it can't tell how recently the panel refreshed
+  before a reset. It answers `COOLDOWN` with the seconds left. Check before
   uploading so the user isn't left waiting after a full transfer.
 
 ## Notes for the app

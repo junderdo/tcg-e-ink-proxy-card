@@ -6,8 +6,7 @@ pixel. Images of any size are scaled to the panel height and centered, cutting
 off the left and right edges (or padding with white if too narrow), then
 dithered to the panel palette and packed two pixels per byte. Portrait images
 fill 400x600; landscape images fill 600x400 and are rotated to match the
-Waveshare demo (Paint rotate 90). The firmware embeds the output file at build
-time.
+Waveshare demo (Paint rotate 90). Send the output file with ble_upload.py.
 """
 
 import argparse
@@ -27,9 +26,6 @@ PALETTE = [
     ((0, 0, 255), 0x5),
     ((0, 255, 0), 0x6),
 ]
-
-DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "firmware" / "main" / "image.bin"
-
 
 def load_rgb(path: Path) -> Image.Image:
     rgba = Image.open(path).convert("RGBA")
@@ -69,7 +65,7 @@ def pack(indexed: Image.Image) -> bytes:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("png", type=Path, help="image to convert")
-    parser.add_argument("-o", "--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("-o", "--output", type=Path, help="frame buffer to write (default: the image path with .bin)")
     parser.add_argument("--no-dither", action="store_true", help="map to nearest color without dithering")
     parser.add_argument("--saturation", type=float, default=1.8, help="1.0 leaves colors unchanged (default 1.8)")
     parser.add_argument("--contrast", type=float, default=1.2, help="1.0 leaves contrast unchanged (default 1.2)")
@@ -81,8 +77,9 @@ def main() -> None:
     if args.preview:
         indexed.convert("RGB").save(args.preview)
 
-    args.output.write_bytes(pack(indexed))
-    print(f"wrote {args.output}")
+    output = args.output or args.png.with_suffix(".bin")
+    output.write_bytes(pack(indexed))
+    print(f"wrote {output}")
 
 
 if __name__ == "__main__":

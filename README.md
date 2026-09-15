@@ -11,8 +11,8 @@ Reference: [Waveshare wiki](https://www.waveshare.com/wiki/3.6inch_e-Paper_HAT%2
 | --- | --- |
 | `firmware/` | ESP-IDF project |
 | `firmware/components/epd_3in6e/` | Panel driver, ported from Waveshare's Arduino demo to hardware SPI |
-| `firmware/main/` | App that shows the last uploaded image (or `image.bin`) and accepts new ones over BLE |
-| `tools/png_to_epd.py` | Converts an image into `firmware/main/image.bin` |
+| `firmware/main/` | App that accepts images over BLE and shows each one as it arrives |
+| `tools/png_to_epd.py` | Converts an image into a panel frame buffer (`.bin`) |
 | `tools/ble_upload.py` | Uploads an image over BLE |
 | `docs/ble-image-upload.md` | BLE upload protocol |
 | `images/` | Source PNGs |
@@ -47,10 +47,12 @@ idf.py -p /dev/ttyACM0 flash monitor
 The target (`esp32s3`) comes from `sdkconfig.defaults`. Under WSL, attach the
 board's USB port with `usbipd` first.
 
-`images/test-pattern.png` has an arrow marking the top, a red square at the
-top-left, a gray dither ramp, and the six colors — convert and flash it to
-confirm wiring, orientation, and colors. The log reports how long the
-refresh took; a `busy timeout` usually means a wiring problem.
+The firmware doesn't refresh the panel at boot; it keeps whatever it last
+showed until an image is uploaded (see below). `images/test-pattern.png` has an
+arrow marking the top, a red square at the top-left, a gray dither ramp, and
+the six colors — upload it to confirm wiring, orientation, and colors. The log
+reports how long the refresh took; a `busy timeout` usually means a wiring
+problem.
 
 ## Show your own image
 
@@ -68,16 +70,15 @@ python3 -m venv .venv
 .venv/bin/python tools/png_to_epd.py images/my-image.png --preview /tmp/preview.png
 ```
 
-This rewrites `firmware/main/image.bin`. Check `/tmp/preview.png` for the
-dithered result, then build and flash. Pass `--no-dither` for hard-edged
+This writes `images/my-image.bin`. Check `/tmp/preview.png` for the dithered
+result, then upload it over BLE (below). Pass `--no-dither` for hard-edged
 graphics. The image stays on screen with the board unpowered.
 
 ## Upload an image over BLE
 
 The board advertises as **TCG Proxy Card**. A connected client can send an
-image, which the firmware saves to the `image` flash partition and shows; it
-is shown again after a reboot. Until an image is uploaded, the built-in
-`image.bin` is shown. See [docs/ble-image-upload.md](docs/ble-image-upload.md)
+image, which the firmware saves to the `image` flash partition and shows.
+Booting doesn't refresh the panel, so the last image stays on screen. See [docs/ble-image-upload.md](docs/ble-image-upload.md)
 for the protocol.
 
 From a computer with Bluetooth (uses the same conversion as `png_to_epd.py`):
@@ -87,8 +88,7 @@ From a computer with Bluetooth (uses the same conversion as `png_to_epd.py`):
 ```
 
 The saved image lives in the `image` partition of `firmware/partitions.csv`,
-which `idf.py flash` writes (`app-flash` alone doesn't). To go back to the
-built-in image, erase it:
+which `idf.py flash` writes (`app-flash` alone doesn't). To erase it:
 
 ```sh
 python -m esptool --chip esp32s3 -p /dev/ttyACM0 erase_region 0x190000 0x40000
@@ -98,6 +98,7 @@ python -m esptool --chip esp32s3 -p /dev/ttyACM0 erase_region 0x190000 0x40000
 
 - Don't leave the panel powered between refreshes; the firmware puts it to
   sleep and cuts power.
-- Refresh no more often than every 180 s (the firmware rejects uploads sooner), and at least once every 24 h when in
-  regular use.
+- Refresh no more often than every 180 s (the firmware rejects uploads sooner,
+  counting from boot too, since it can't tell how long ago the last refresh
+  was), and at least once every 24 h when in regular use.
 - Clear to white before long-term storage.
