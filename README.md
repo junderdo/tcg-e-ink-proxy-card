@@ -1,4 +1,4 @@
-# tcg-e-ink-display
+# tcg-e-ink-proxy-card
 
 An ESP32-S3 driving a Waveshare 3.6" e-Paper HAT+ (E) — 600x400, six colors
 (black, white, yellow, red, blue, green) — to show PNG graphics.
