@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include "ble.h"
 #include "epd_3in6e.h"
 #include "esp_check.h"
 #include "esp_log.h"
@@ -46,6 +47,9 @@ static esp_err_t show_image(void)
 
 void app_main(void)
 {
+    if (ble_start() != ESP_OK) {
+        ESP_LOGE(TAG, "BLE unavailable, showing image anyway");
+    }
     if (show_image() == ESP_OK) {
         ESP_LOGI(TAG, "done, panel powered off");
     }
