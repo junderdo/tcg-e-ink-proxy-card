@@ -12,7 +12,7 @@ Reference: [Waveshare wiki](https://www.waveshare.com/wiki/3.6inch_e-Paper_HAT%2
 | `firmware/` | ESP-IDF project |
 | `firmware/components/epd_3in6e/` | Panel driver, ported from Waveshare's Arduino demo to hardware SPI |
 | `firmware/main/` | App that shows `image.bin` once and powers the panel off |
-| `tools/png_to_epd.py` | Converts a 600x400 PNG into `firmware/main/image.bin` |
+| `tools/png_to_epd.py` | Converts an image into `firmware/main/image.bin` |
 | `images/` | Source PNGs |
 
 ## Wiring (Seeed XIAO ESP32-S3)
@@ -52,8 +52,11 @@ refresh took; a `busy timeout` usually means a wiring problem.
 
 ## Show your own image
 
-Create a 400x600 (portrait, the panel's native orientation) or 600x400
-(landscape) PNG. Anything with transparency is composited onto white. Colors
+Any size works. The image is scaled to the panel height and centered, so a
+card image such as Scryfall's 672x936 PNGs loses only a sliver of its left and
+right edges; an image narrower than the panel is padded with white. Portrait
+images fill 400x600 (the panel's native orientation); landscape ones fill
+600x400. Transparency is composited onto white. Colors
 are boosted (`--saturation 1.8 --contrast 1.2` by default; pass `1.0` to
 disable) and dithered to the six panel colors.
 

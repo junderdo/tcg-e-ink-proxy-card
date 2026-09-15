@@ -2,14 +2,15 @@
 """Convert a PNG into a frame buffer for the Waveshare 3.6" e-Paper (E).
 
 The panel shows six colors and is natively 400x600 (portrait) with 4 bits per
-pixel. The image is dithered to the panel palette and packed two pixels per
-byte. Portrait 400x600 images are sent as-is; landscape 600x400 images are
-rotated to match the Waveshare demo (Paint rotate 90). The firmware embeds the
-output file at build time.
+pixel. Images of any size are scaled to the panel height and centered, cutting
+off the left and right edges (or padding with white if too narrow), then
+dithered to the panel palette and packed two pixels per byte. Portrait images
+fill 400x600; landscape images fill 600x400 and are rotated to match the
+Waveshare demo (Paint rotate 90). The firmware embeds the output file at build
+time.
 """
 
 import argparse
-import sys
 from pathlib import Path
 
 from PIL import Image, ImageEnhance
@@ -31,12 +32,18 @@ DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "firmware" / "main" / 
 
 
 def load_rgb(path: Path) -> Image.Image:
-    image = Image.open(path)
-    if image.size not in (NATIVE_SIZE, LANDSCAPE_SIZE):
-        sys.exit(f"{path}: expected 400x600 or 600x400, got {image.width}x{image.height}")
-    rgba = image.convert("RGBA")
+    rgba = Image.open(path).convert("RGBA")
     background = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
     return Image.alpha_composite(background, rgba).convert("RGB")
+
+
+def fit_height(image: Image.Image) -> Image.Image:
+    target_w, target_h = NATIVE_SIZE if image.height >= image.width else LANDSCAPE_SIZE
+    scaled_w = round(image.width * target_h / image.height)
+    scaled = image.resize((scaled_w, target_h), Image.Resampling.LANCZOS)
+    canvas = Image.new("RGB", (target_w, target_h), (255, 255, 255))
+    canvas.paste(scaled, ((target_w - scaled_w) // 2, 0))
+    return canvas
 
 
 def enhance(image: Image.Image, saturation: float, contrast: float) -> Image.Image:
@@ -61,7 +68,7 @@ def pack(indexed: Image.Image) -> bytes:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("png", type=Path, help="400x600 or 600x400 PNG to convert")
+    parser.add_argument("png", type=Path, help="image to convert")
     parser.add_argument("-o", "--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--no-dither", action="store_true", help="map to nearest color without dithering")
     parser.add_argument("--saturation", type=float, default=1.8, help="1.0 leaves colors unchanged (default 1.8)")
@@ -69,7 +76,7 @@ def main() -> None:
     parser.add_argument("--preview", type=Path, help="also save a PNG of the dithered result")
     args = parser.parse_args()
 
-    image = enhance(load_rgb(args.png), args.saturation, args.contrast)
+    image = enhance(fit_height(load_rgb(args.png)), args.saturation, args.contrast)
     indexed = quantize(image, dither=not args.no_dither)
     if args.preview:
         indexed.convert("RGB").save(args.preview)
