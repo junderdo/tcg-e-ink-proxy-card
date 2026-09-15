@@ -1,0 +1,116 @@
+#include "display.h"
+
+#include <stdatomic.h>
+#include <stdlib.h>
+#include "epd_3in6e.h"
+#include "esp_check.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "image_store.h"
+#include "sdkconfig.h"
+
+#define TASK_STACK_SIZE 4096
+
+extern const uint8_t image_bin_start[] asm("_binary_image_bin_start");
+extern const uint8_t image_bin_end[] asm("_binary_image_bin_end");
+
+static const char *TAG = "display";
+
+typedef struct {
+    uint8_t *frame;
+    display_done_fn done;
+} job_t;
+
+static QueueHandle_t s_jobs;
+static atomic_bool s_busy = true;
+
+static esp_err_t render(const uint8_t *frame)
+{
+    const epd_3in6e_pins_t pins = {
+        .mosi = CONFIG_EPD_PIN_DIN,
+        .sclk = CONFIG_EPD_PIN_CLK,
+        .cs = CONFIG_EPD_PIN_CS,
+        .dc = CONFIG_EPD_PIN_DC,
+        .rst = CONFIG_EPD_PIN_RST,
+        .busy = CONFIG_EPD_PIN_BUSY,
+        .pwr = CONFIG_EPD_PIN_PWR,
+    };
+    ESP_RETURN_ON_ERROR(epd_3in6e_open(&pins), TAG, "open");
+
+    esp_err_t err = epd_3in6e_init();
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "refreshing display");
+        err = epd_3in6e_display(frame);
+    }
+
+    // The panel must not stay powered between refreshes or it can be damaged.
+    epd_3in6e_sleep();
+    vTaskDelay(pdMS_TO_TICKS(2000));
+    epd_3in6e_close();
+    return err;
+}
+
+static void render_startup_image(void)
+{
+    esp_partition_mmap_handle_t handle;
+    const uint8_t *saved = image_store_map(&handle);
+    if (saved != NULL) {
+        ESP_LOGI(TAG, "showing saved image");
+        render(saved);
+        esp_partition_munmap(handle);
+        return;
+    }
+
+    size_t size = image_bin_end - image_bin_start;
+    if (size != EPD_3IN6E_BUFFER_SIZE) {
+        ESP_LOGE(TAG, "image.bin is %u bytes, expected %u; regenerate it with tools/png_to_epd.py",
+                 (unsigned)size, (unsigned)EPD_3IN6E_BUFFER_SIZE);
+        return;
+    }
+    ESP_LOGI(TAG, "showing built-in image");
+    render(image_bin_start);
+}
+
+static void display_task(void *arg)
+{
+    render_startup_image();
+    ESP_LOGI(TAG, "ready, panel powered off");
+    atomic_store(&s_busy, false);
+
+    job_t job;
+    for (;;) {
+        xQueueReceive(s_jobs, &job, portMAX_DELAY);
+        esp_err_t save_err = image_store_save(job.frame);
+        esp_err_t display_err = render(job.frame);
+        free(job.frame);
+        atomic_store(&s_busy, false);
+        job.done(save_err, display_err);
+    }
+}
+
+esp_err_t display_start(void)
+{
+    s_jobs = xQueueCreate(1, sizeof(job_t));
+    ESP_RETURN_ON_FALSE(s_jobs != NULL, ESP_ERR_NO_MEM, TAG, "queue");
+    ESP_RETURN_ON_FALSE(xTaskCreate(display_task, "display", TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, NULL) == pdPASS,
+                        ESP_ERR_NO_MEM, TAG, "task");
+    return ESP_OK;
+}
+
+bool display_busy(void)
+{
+    return atomic_load(&s_busy);
+}
+
+esp_err_t display_show_new(uint8_t *frame, display_done_fn done)
+{
+    bool idle = false;
+    if (!atomic_compare_exchange_strong(&s_busy, &idle, true)) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const job_t job = { .frame = frame, .done = done };
+    xQueueSend(s_jobs, &job, 0);
+    return ESP_OK;
+}
