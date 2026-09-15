@@ -45,7 +45,8 @@ idf.py -p /dev/ttyACM0 flash monitor
 ```
 
 The target (`esp32s3`) comes from `sdkconfig.defaults`. Under WSL, attach the
-board's USB port with `usbipd` first.
+board's USB port with `usbipd` first. Use `flash`, not `app-flash`, whenever
+the partition table changes.
 
 The firmware doesn't refresh the panel at boot; it keeps whatever it last
 showed until an image is uploaded (see below). `images/test-pattern.png` has an
@@ -77,21 +78,14 @@ graphics. The image stays on screen with the board unpowered.
 ## Upload an image over BLE
 
 The board advertises as **TCG Proxy Card**. A connected client can send an
-image, which the firmware saves to the `image` flash partition and shows.
-Booting doesn't refresh the panel, so the last image stays on screen. See [docs/ble-image-upload.md](docs/ble-image-upload.md)
+image, which the firmware shows. Booting doesn't refresh the panel, so the
+last image stays on screen. See [docs/ble-image-upload.md](docs/ble-image-upload.md)
 for the protocol.
 
 From a computer with Bluetooth (uses the same conversion as `png_to_epd.py`):
 
 ```sh
 .venv/bin/python tools/ble_upload.py images/my-image.png
-```
-
-The saved image lives in the `image` partition of `firmware/partitions.csv`,
-which `idf.py flash` writes (`app-flash` alone doesn't). To erase it:
-
-```sh
-python -m esptool --chip esp32s3 -p /dev/ttyACM0 erase_region 0x190000 0x40000
 ```
 
 ## Panel care
