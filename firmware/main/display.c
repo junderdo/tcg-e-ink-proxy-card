@@ -15,9 +15,6 @@
 #define TASK_STACK_SIZE 4096
 #define MIN_REFRESH_INTERVAL_S 180
 
-extern const uint8_t image_bin_start[] asm("_binary_image_bin_start");
-extern const uint8_t image_bin_end[] asm("_binary_image_bin_end");
-
 static const char *TAG = "display";
 
 typedef struct {
@@ -26,8 +23,9 @@ typedef struct {
 } job_t;
 
 static QueueHandle_t s_jobs;
-static atomic_bool s_busy = true;
-static atomic_uint_least32_t s_next_refresh_s;
+static atomic_bool s_busy;
+// Uptime restarts at every boot, so the cooldown also runs from boot: a reboot can't skip it.
+static atomic_uint_least32_t s_next_refresh_s = MIN_REFRESH_INTERVAL_S;
 
 static uint32_t uptime_s(void)
 {
@@ -62,33 +60,9 @@ static esp_err_t render(const uint8_t *frame)
     return err;
 }
 
-static void render_startup_image(void)
-{
-    esp_partition_mmap_handle_t handle;
-    const uint8_t *saved = image_store_map(&handle);
-    if (saved != NULL) {
-        ESP_LOGI(TAG, "showing saved image");
-        render(saved);
-        esp_partition_munmap(handle);
-        return;
-    }
-
-    size_t size = image_bin_end - image_bin_start;
-    if (size != EPD_3IN6E_BUFFER_SIZE) {
-        ESP_LOGE(TAG, "image.bin is %u bytes, expected %u; regenerate it with tools/png_to_epd.py",
-                 (unsigned)size, (unsigned)EPD_3IN6E_BUFFER_SIZE);
-        return;
-    }
-    ESP_LOGI(TAG, "showing built-in image");
-    render(image_bin_start);
-}
-
 static void display_task(void *arg)
 {
-    render_startup_image();
-    ESP_LOGI(TAG, "ready, panel powered off");
-    atomic_store(&s_busy, false);
-
+    ESP_LOGI(TAG, "ready, panel untouched until an upload");
     job_t job;
     for (;;) {
         xQueueReceive(s_jobs, &job, portMAX_DELAY);
