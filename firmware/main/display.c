@@ -9,7 +9,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "image_store.h"
 #include "sdkconfig.h"
 
 #define TASK_STACK_SIZE 4096
@@ -66,11 +65,10 @@ static void display_task(void *arg)
     job_t job;
     for (;;) {
         xQueueReceive(s_jobs, &job, portMAX_DELAY);
-        esp_err_t save_err = image_store_save(job.frame);
-        esp_err_t display_err = render(job.frame);
+        esp_err_t err = render(job.frame);
         free(job.frame);
         atomic_store(&s_busy, false);
-        job.done(save_err, display_err);
+        job.done(err);
     }
 }
 

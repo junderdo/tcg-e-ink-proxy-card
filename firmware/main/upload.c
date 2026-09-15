@@ -36,7 +36,7 @@ typedef enum {
     ERR_INCOMPLETE = 0x08,
     ERR_CRC_MISMATCH = 0x09,
     ERR_NO_MEMORY = 0x0A,
-    ERR_STORAGE_FAILED = 0x0B,
+    // 0x0B was STORAGE_FAILED; don't reuse it.
     ERR_DISPLAY_FAILED = 0x0C,
     ERR_COOLDOWN = 0x0D,
 } upload_error_t;
@@ -80,12 +80,12 @@ static void report(upload_error_t error, uint32_t value)
     send_status(EVENT_ERROR, error, value);
 }
 
-static void on_displayed(esp_err_t save_err, esp_err_t display_err)
+static void on_displayed(esp_err_t err)
 {
-    if (display_err != ESP_OK) {
+    if (err != ESP_OK) {
         send_status(EVENT_ERROR, ERR_DISPLAY_FAILED, 0);
     } else {
-        send_status(EVENT_DISPLAYED, save_err == ESP_OK ? ERR_NONE : ERR_STORAGE_FAILED, 0);
+        send_status(EVENT_DISPLAYED, ERR_NONE, 0);
     }
 }
 

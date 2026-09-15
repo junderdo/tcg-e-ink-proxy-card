@@ -39,7 +39,6 @@ ERRORS = {
     0x08: "INCOMPLETE",
     0x09: "CRC_MISMATCH",
     0x0A: "NO_MEMORY",
-    0x0B: "STORAGE_FAILED",
     0x0C: "DISPLAY_FAILED",
     0x0D: "COOLDOWN",
 }
@@ -106,12 +105,9 @@ async def upload(address: str | None, frame: bytes, with_response: bool) -> None
 
         await client.write_gatt_char(CONTROL_UUID, bytes([OP_COMMIT]), response=True)
         await expect(EVENT_VERIFIED, 10)
-        print("\nverified; saving and refreshing the panel")
-        code = await expect(EVENT_DISPLAYED, 90)
-        if code:
-            print(f"displayed, but {ERRORS.get(code, hex(code))}")
-        else:
-            print("displayed")
+        print("\nverified; refreshing the panel")
+        await expect(EVENT_DISPLAYED, 90)
+        print("displayed")
 
 
 def main() -> None:
