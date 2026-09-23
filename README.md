@@ -92,7 +92,12 @@ From a computer with Bluetooth (uses the same conversion as `png_to_epd.py`):
 
 - Don't leave the panel powered between refreshes; the firmware puts it to
   sleep and cuts power.
-- Refresh no more often than every 180 s (the firmware rejects uploads sooner,
-  counting from boot too, since it can't tell how long ago the last refresh
-  was), and at least once every 24 h when in regular use.
-- Clear to white before long-term storage.
+- Refresh no more often than every 180 s (the firmware rejects uploads sooner),
+  and at least once every 24 h when in regular use.
+- **A reboot clears that 180 s wait.** The firmware can't tell how long ago the
+  panel refreshed before a reset, so it accepts an upload right after boot.
+  Don't reset the board to get around the wait — refreshing the panel that
+  often shortens its life.
+- Clear to white before long-term storage. The firmware does this for you after
+  24 h with no refresh; the countdown starts at boot and restarts at every
+  refresh, so a card you're using stays on its image.

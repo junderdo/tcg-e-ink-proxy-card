@@ -6,3 +6,4 @@ firmware/sdkconfig.old
 firmware/managed_components/
 images/*
 !images/test-pattern.png
+firmware/.cache/

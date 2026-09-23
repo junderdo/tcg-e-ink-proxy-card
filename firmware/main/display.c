@@ -13,6 +13,7 @@
 
 #define TASK_STACK_SIZE 4096
 #define MIN_REFRESH_INTERVAL_S 180
+#define IDLE_WHITEOUT_S (24 * 60 * 60)
 
 static const char *TAG = "display";
 
@@ -23,8 +24,11 @@ typedef struct {
 
 static QueueHandle_t s_jobs;
 static atomic_bool s_busy;
-// Uptime restarts at every boot, so the cooldown also runs from boot: a reboot can't skip it.
-static atomic_uint_least32_t s_next_refresh_s = MIN_REFRESH_INTERVAL_S;
+// A reboot clears the cooldown; the panel can't tell us when it last refreshed. Documented as
+// "don't reboot to skip the wait" rather than enforced.
+static atomic_uint_least32_t s_next_refresh_s;
+// Uptime at which an idle panel is blanked for storage, or 0 once it already holds white.
+static atomic_uint_least32_t s_whiteout_at_s = IDLE_WHITEOUT_S;
 
 static uint32_t uptime_s(void)
 {
@@ -46,8 +50,8 @@ static esp_err_t render(const uint8_t *frame)
 
     esp_err_t err = epd_3in6e_init();
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "refreshing display");
-        err = epd_3in6e_display(frame);
+        ESP_LOGI(TAG, "%s", frame ? "refreshing display" : "blanking display for storage");
+        err = frame ? epd_3in6e_display(frame) : epd_3in6e_clear(EPD_3IN6E_WHITE);
     }
 
     // The panel must not stay powered between refreshes or it can be damaged.
@@ -56,19 +60,38 @@ static esp_err_t render(const uint8_t *frame)
     epd_3in6e_close();
     // Counted even on failure: the panel may have been partly driven.
     atomic_store(&s_next_refresh_s, uptime_s() + MIN_REFRESH_INTERVAL_S);
+    atomic_store(&s_whiteout_at_s, frame ? uptime_s() + IDLE_WHITEOUT_S : 0);
     return err;
+}
+
+static TickType_t wait_until_whiteout(void)
+{
+    uint32_t due = atomic_load(&s_whiteout_at_s);
+    if (due == 0) {
+        return portMAX_DELAY;
+    }
+    uint32_t now = uptime_s();
+    // Ticks from seconds directly: pdMS_TO_TICKS() overflows its 32-bit multiply at this scale.
+    return due > now ? (TickType_t)(due - now) * configTICK_RATE_HZ : 0;
 }
 
 static void display_task(void *arg)
 {
-    ESP_LOGI(TAG, "ready, panel untouched until an upload");
+    ESP_LOGI(TAG, "ready, panel untouched until an upload or %d h idle", IDLE_WHITEOUT_S / 3600);
     job_t job;
     for (;;) {
-        xQueueReceive(s_jobs, &job, portMAX_DELAY);
-        esp_err_t err = render(job.frame);
-        free(job.frame);
-        atomic_store(&s_busy, false);
-        job.done(err);
+        if (xQueueReceive(s_jobs, &job, wait_until_whiteout()) == pdTRUE) {
+            esp_err_t err = render(job.frame);
+            free(job.frame);
+            atomic_store(&s_busy, false);
+            job.done(err);
+            continue;
+        }
+        bool idle = false;
+        if (atomic_compare_exchange_strong(&s_busy, &idle, true)) {
+            render(NULL);
+            atomic_store(&s_busy, false);
+        }
     }
 }
 
