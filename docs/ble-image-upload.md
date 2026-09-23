@@ -128,7 +128,7 @@ Every `ERROR` ends the transfer; start again with `START`.
 | `0x0A` | `NO_MEMORY` | couldn't allocate the frame buffer | 0 |
 | `0x0B` | reserved | no longer sent (was `STORAGE_FAILED`); won't be reused | — |
 | `0x0C` | `DISPLAY_FAILED` | panel refresh failed (e.g. busy timeout / wiring) | 0 |
-| `0x0D` | `COOLDOWN` | less than 180 s since the last refresh or since boot; checked at `START` and `COMMIT` | seconds until a refresh is allowed |
+| `0x0D` | `COOLDOWN` | less than 180 s since the last refresh; checked at `START` and `COMMIT` | seconds until a refresh is allowed |
 
 ## Behavior
 
@@ -138,14 +138,22 @@ Every `ERROR` ends the transfer; start again with `START`.
 - **No stored copy.** The card doesn't keep the frame after the refresh.
   Booting never refreshes the panel, so the e-paper holds the last image
   without power until the next upload.
+- **Idle whiteout.** After 24 h with no refresh the card blanks the panel to
+  white on its own, the state the panel should be left in for storage. The
+  countdown starts at boot and restarts at every refresh, so a card in regular
+  use never blanks. Nothing is sent over BLE when it happens; a central that
+  reconnects later just finds a white panel and can upload again.
 - **Timing.** At 1M PHY and MTU 517 a transfer takes roughly 5-15 s depending on
   the phone's connection interval. A refresh takes ~20-40 s.
   Allow at least 90 s between `VERIFIED` and `DISPLAYED` before giving up.
 - **Panel care.** The panel shouldn't refresh more often than every 180 s.
-  The card enforces this from the end of the previous refresh, and also for
-  180 s after boot because it can't tell how recently the panel refreshed
-  before a reset. It answers `COOLDOWN` with the seconds left. Check before
-  uploading so the user isn't left waiting after a full transfer.
+  The card enforces this from the end of the previous refresh and answers
+  `COOLDOWN` with the seconds left. Check before uploading so the user isn't
+  left waiting after a full transfer. A reboot clears the cooldown — the card
+  can't tell how recently the panel refreshed before a reset — so an upload
+  right after boot is accepted. Don't use that to refresh faster than every
+  180 s; it damages the panel. Don't build a reset-then-upload retry into the
+  app.
 
 ## Notes for the app
 

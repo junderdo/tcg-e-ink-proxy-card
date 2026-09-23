@@ -6,7 +6,10 @@
 
 typedef void (*display_done_fn)(esp_err_t err);
 
-/** Starts the display task. The panel is left untouched until a new frame arrives. */
+/**
+ * Starts the display task. The panel is left untouched until a new frame arrives, except that
+ * after 24 h with no refresh it is blanked to white, the state the panel should be stored in.
+ */
 esp_err_t display_start(void);
 
 /** True while the display task is refreshing and can't take a new frame. */
